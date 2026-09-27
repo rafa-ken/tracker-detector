@@ -73,6 +73,18 @@ browser.runtime.onMessage.addListener((msg, sender) => {
         }));
       });
 
+      case "storageReport":
+        if (sender.tab && tabsData[sender.tab.id]) {
+          tabsData[sender.tab.id].storage = msg.data;
+        }
+        return;
+
+    case "getStorage":
+      return activeTab().then((tab) => {
+        const t = tabsData[tab.id];
+        return (t && t.storage) || { localStorage: 0, sessionStorage: 0, indexedDB: 0 };
+      });
+
     default:
       return;
   }

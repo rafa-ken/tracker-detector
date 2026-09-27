@@ -21,3 +21,9 @@ browser.runtime.sendMessage({ type: "getCookies" }).then((r) => {
 }).catch((e) => {
   document.getElementById("cookieCount").textContent = "ERRO: " + e.message;
 });
+
+browser.runtime.sendMessage({ type: "getStorage" }).then((r) => {
+  document.getElementById("ls").textContent = r.localStorage;
+  document.getElementById("ss").textContent = r.sessionStorage;
+  document.getElementById("idb").textContent = r.indexedDB;
+});
