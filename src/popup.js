@@ -11,11 +11,17 @@ browser.runtime.sendMessage({ type: "getReport" }).then((r) => {
 
 browser.runtime.sendMessage({ type: "getCookies" }).then((r) => {
   const cookies = (r && r.cookies) || [];
-  document.getElementById("cookieCount").textContent = cookies.length;
+  const primeira = cookies.filter((c) => c.party === "1ª parte").length;
+  const terceira = cookies.length - primeira;
+
+  document.getElementById("cookieCount").textContent =
+    `${cookies.length} (1ª parte: ${primeira}, 3ª parte: ${terceira})`;
+
   const ul = document.getElementById("cookieList");
   cookies.forEach((c) => {
     const li = document.createElement("li");
-    li.textContent = `${c.name} — ${c.domain} (${c.party}, ${c.tipo})`;
+    li.textContent =
+      `${c.name} — ${c.domain} (${c.party}, ${c.tipo}${c.particionado ? ", particionado" : ""})`;
     ul.appendChild(li);
   });
 }).catch((e) => {
