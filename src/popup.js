@@ -33,3 +33,11 @@ browser.runtime.sendMessage({ type: "getStorage" }).then((r) => {
   document.getElementById("ss").textContent = r.sessionStorage;
   document.getElementById("idb").textContent = r.indexedDB;
 });
+
+browser.runtime.sendMessage({ type: "getCanvas" }).then((r) => {
+  const el = document.getElementById("canvas");
+  if (r.metodos.length) {
+    el.textContent = "SUSPEITA — métodos usados: " + r.metodos.join(", ");
+    el.style.color = "#b00";
+  }
+});

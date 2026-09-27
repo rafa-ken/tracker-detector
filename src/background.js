@@ -114,6 +114,18 @@ browser.runtime.onMessage.addListener((msg, sender) => {
         return (t && t.storage) || { localStorage: 0, sessionStorage: 0, indexedDB: 0 };
       });
 
+    case "canvasReport":
+      if (sender.tab && tabsData[sender.tab.id]) {
+          tabsData[sender.tab.id].canvas = msg.metodos;
+        }
+        return;
+
+    case "getCanvas":
+      return activeTab().then((tab) => {
+        const t = tabsData[tab.id];
+        return { metodos: (t && t.canvas) || [] };
+      });
+
     default:
       return;
   }
