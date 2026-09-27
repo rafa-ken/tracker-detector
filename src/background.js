@@ -83,15 +83,19 @@ browser.webRequest.onBeforeRequest.addListener(
         websockets: new Set(),
         contagem: {},
         hooks: [],
+        cookiesInjetados: [],
       };
+
       if (origem) tabsData[d.tabId].hostsConhecidos.add(origem);
       for (const h of chain) {
         tabsData[d.tabId].hostsConhecidos.add(h.from);
         tabsData[d.tabId].hostsConhecidos.add(h.to);
       }
-      for (const n of navHistory[d.tabId]) {
-        if (n.host) tabsData[d.tabId].hostsConhecidos.add(n.host);
-      }
+      // Apenas a página imediatamente anterior, que pode ter sido o
+      // intermediário de um bounce. O histórico completo contaminaria a
+      // análise com sites sem relação com a página atual.
+      const anterior = navHistory[d.tabId][navHistory[d.tabId].length - 2];
+      if (anterior && anterior.host) tabsData[d.tabId].hostsConhecidos.add(anterior.host);
       return;
     }
 
@@ -145,13 +149,64 @@ browser.webRequest.onBeforeRedirect.addListener(
   { urls: ["<all_urls>"] }
 );
 
+// ---- Cookies injetados no carregamento (cabeçalhos Set-Cookie) ----
+
+function parseSetCookie(linha, hostReq) {
+  const partes = linha.split(";");
+  const primeiro = partes.shift() || "";
+  const i = primeiro.indexOf("=");
+  if (i < 0) return null;
+  const name = primeiro.slice(0, i).trim();
+  if (!name) return null;
+
+  let domain = hostReq;
+  let persistente = false;
+  for (const p of partes) {
+    const igual = p.indexOf("=");
+    const chave = (igual < 0 ? p : p.slice(0, igual)).trim().toLowerCase();
+    const valor = igual < 0 ? "" : p.slice(igual + 1).trim();
+    if (chave === "domain" && valor) domain = valor.replace(/^\./, "");
+    if (chave === "expires" || chave === "max-age") persistente = true;
+  }
+  return { name, domain, persistente };
+}
+
+browser.webRequest.onHeadersReceived.addListener(
+  (d) => {
+    if (d.tabId < 0) return;
+    const t = tabsData[d.tabId];
+    if (!t) return;
+    const hostReq = hostOf(d.url);
+    if (!hostReq) return;
+
+    for (const h of d.responseHeaders || []) {
+      if (h.name.toLowerCase() !== "set-cookie") continue;
+      // O Firefox pode juntar vários Set-Cookie num valor separado por \n
+      for (const linha of (h.value || "").split("\n")) {
+        const c = parseSetCookie(linha, hostReq);
+        if (!c) continue;
+        const chave = c.name + "|" + c.domain;
+        if (t.cookiesInjetados.some((x) => x.name + "|" + x.domain === chave)) continue;
+        t.cookiesInjetados.push({
+          name: c.name,
+          domain: c.domain,
+          party: siteOf(c.domain) === siteOf(t.host) ? "1ª parte" : "3ª parte",
+          tipo: c.persistente ? "persistente" : "sessão",
+        });
+      }
+    }
+  },
+  { urls: ["<all_urls>"] },
+  ["responseHeaders"]
+);
+
 browser.tabs.onRemoved.addListener((id) => {
   delete tabsData[id];
   delete mainFrameChains[id];
   delete navHistory[id];
 });
 
-// ---- Cookies ----
+// ---- Cookies do jar ----
 
 function classifyCookies(cookies, pageHost) {
   return cookies.map((c) => {
@@ -306,9 +361,10 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     case "getCookies":
       return activeTab().then((tab) => {
         const t = tabsData[tab.id];
-        if (!t || !t.host) return { cookies: [] };
+        if (!t || !t.host) return { cookies: [], injetados: [] };
         return coletarCookies(tab, t).then((todos) => ({
           cookies: classifyCookies(todos, t.host),
+          injetados: t.cookiesInjetados,
         }));
       });
 
@@ -336,7 +392,6 @@ browser.runtime.onMessage.addListener((msg, sender) => {
       return activeTab().then((tab) => {
         const t = tabsData[tab.id];
         const guardado = (t && t.storage) || { localStorage: 0, sessionStorage: 0, indexedDB: 0 };
-        // Mede agora, no quadro principal; se falhar, usa o valor do carregamento
         return browser.tabs.sendMessage(tab.id, { type: "medirStorageAgora" }, { frameId: 0 })
           .then((atual) => atual || guardado)
           .catch(() => guardado);

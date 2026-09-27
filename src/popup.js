@@ -7,73 +7,110 @@ function lista(id, itens, texto) {
   });
 }
 
-browser.runtime.sendMessage({ type: "getReport" }).then((r) => {
-  document.getElementById("site").textContent = r.host || "sem dados (recarregue a página)";
-  document.getElementById("count").textContent = r.thirdParties.length;
-  lista("list", r.thirdParties, (h) => h);
-});
+function pedir(tipo) {
+  return browser.runtime.sendMessage({ type: tipo });
+}
 
-browser.runtime.sendMessage({ type: "getCookies" }).then((r) => {
-  const cookies = (r && r.cookies) || [];
+Promise.all([
+  pedir("getReport"),
+  pedir("getCookies"),
+  pedir("getStorage"),
+  pedir("getCanvas"),
+  pedir("getTracking"),
+  pedir("getHijack"),
+]).then(([rep, cook, stor, canv, track, hij]) => {
+  const cookies = (cook && cook.cookies) || [];
+  const injetados = (cook && cook.injetados) || [];
+
+  // ---- Cabeçalho e terceiros ----
+  document.getElementById("site").textContent = rep.host || "sem dados (recarregue a página)";
+  document.getElementById("count").textContent = rep.thirdParties.length;
+  lista("list", rep.thirdParties, (h) => h);
+
+  // ---- Cookies ----
+  const inj1 = injetados.filter((c) => c.party === "1ª parte").length;
+  document.getElementById("injCount").textContent =
+    `${injetados.length} (1ª parte: ${inj1}, 3ª parte: ${injetados.length - inj1})`;
+  lista("injList", injetados, (c) => `${c.name} — ${c.domain} (${c.party}, ${c.tipo})`);
+
   const primeira = cookies.filter((c) => c.party === "1ª parte").length;
   document.getElementById("cookieCount").textContent =
     `${cookies.length} (1ª parte: ${primeira}, 3ª parte: ${cookies.length - primeira})`;
   lista("cookieList", cookies, (c) =>
     `${c.name} — ${c.domain} (${c.party}, ${c.tipo}${c.particionado ? ", particionado" : ""})`);
-});
 
-browser.runtime.sendMessage({ type: "getStorage" }).then((r) => {
-  document.getElementById("ls").textContent = r.localStorage;
-  document.getElementById("ss").textContent = r.sessionStorage;
-  document.getElementById("idb").textContent = r.indexedDB;
-});
+  // ---- Storage ----
+  document.getElementById("ls").textContent = stor.localStorage;
+  document.getElementById("ss").textContent = stor.sessionStorage;
+  document.getElementById("idb").textContent = stor.indexedDB;
 
-browser.runtime.sendMessage({ type: "getCanvas" }).then((r) => {
-  const el = document.getElementById("canvas");
-  if (r.metodos.length) {
-    el.textContent = "SUSPEITA — métodos usados: " + r.metodos.join(", ");
+  // ---- Canvas ----
+  if (canv.metodos.length) {
+    const el = document.getElementById("canvas");
+    el.textContent = "SUSPEITA — métodos usados: " + canv.metodos.join(", ");
     el.className = "alerta";
   }
-});
 
-browser.runtime.sendMessage({ type: "getTracking" }).then((r) => {
-  if (r.sync.length) {
+  // ---- Cookie sync ----
+  if (track.sync.length) {
     const el = document.getElementById("syncResumo");
-    el.textContent = `${r.sync.length} correspondência(s)`;
+    el.textContent = `${track.sync.length} correspondência(s)`;
     el.className = "alerta";
-    lista("syncList", r.sync, (s) =>
+    lista("syncList", track.sync, (s) =>
       `${s.cookie} (${s.origem}) → ${s.destino} via ?${s.param}= [${s.trecho}]`);
   }
 
-  const saltos = r.bounce.saltos3p;
+  // ---- Bounce ----
+  const saltos = track.bounce.saltos3p;
   if (saltos.length) {
     const el = document.getElementById("bounceResumo");
     el.textContent = `${saltos.length} salto(s) por domínio de 3ª parte`;
     el.className = "alerta";
     lista("bounceList", saltos, (s) => `${s.intermediario} → ${s.destino} [${s.via}]`);
-  } else if (r.redirects3p.length) {
+  } else if (track.redirects3p.length) {
     document.getElementById("bounceResumo").textContent =
-      `sem bounce no documento principal; ${r.redirects3p.length} redirect(s) cross-site em sub-recursos`;
-    lista("bounceList", r.redirects3p.slice(0, 20), (s) => `${s.from} → ${s.to}`);
+      `sem bounce no documento principal; ${track.redirects3p.length} redirect(s) cross-site em sub-recursos`;
+    lista("bounceList", track.redirects3p.slice(0, 20), (s) => `${s.from} → ${s.to}`);
   }
 
-  if (r.paramsURL.length) {
+  // ---- Parâmetros de rastreio ----
+  if (track.paramsURL.length) {
     const el = document.getElementById("paramsResumo");
-    el.textContent = r.paramsURL.map((p) => p.param).join(", ");
+    el.textContent = track.paramsURL.map((p) => p.param).join(", ");
     el.className = "alerta";
   }
-});
 
-browser.runtime.sendMessage({ type: "getHijack" }).then((r) => {
-  const itens = [];
-  r.websockets.forEach((h) => itens.push(`WebSocket para 3ª parte: ${h}`));
-  r.polling.forEach((p) => itens.push(`polling: ${p.host} — ${p.n} req em ${p.segundos}s`));
-  r.hooks.forEach((h) => itens.push(`${h.tipo}: ${h.detalhe}`));
+  // ---- Hijacking ----
+  const indicios = [];
+  hij.websockets.forEach((h) => indicios.push(`WebSocket para 3ª parte: ${h}`));
+  hij.polling.forEach((p) => indicios.push(`polling: ${p.host} — ${p.n} req em ${p.segundos}s`));
+  hij.hooks.forEach((h) => indicios.push(`${h.tipo}: ${h.detalhe}`));
 
-  if (itens.length) {
+  if (indicios.length) {
     const el = document.getElementById("hijackResumo");
-    el.textContent = `${itens.length} indício(s)`;
+    el.textContent = `${indicios.length} indício(s)`;
     el.className = "alerta";
-    lista("hijackList", itens, (i) => i);
+    lista("hijackList", indicios, (i) => i);
   }
+
+  // ---- Score ----
+  const r = calcularScore({
+    thirdParties: rep.thirdParties,
+    cookies,
+    injetados,
+    canvas: canv.metodos,
+    sync: track.sync,
+    bounce: saltos,
+    hijack: indicios,
+    storage: stor.localStorage + stor.sessionStorage + stor.indexedDB,
+    paramsURL: track.paramsURL,
+  });
+
+  const elScore = document.getElementById("score");
+  elScore.textContent = r.score;
+  elScore.className = "nota-" + r.nota;
+  document.getElementById("nota").textContent = `(${r.nota})`;
+
+  lista("penalidades", r.penalidades, (p) =>
+    `${p.nome}: ${p.qtd} → −${p.pontos}${p.limitado ? " (teto)" : ""}`);
 });

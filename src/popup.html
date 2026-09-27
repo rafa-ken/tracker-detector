@@ -7,16 +7,28 @@
     h3 { margin: 12px 0 6px; }
     ul { margin: 6px 0; padding-left: 18px; max-height: 200px; overflow: auto; }
     .alerta { color: #b00; }
-    .ok { color: #060; }
+    #score { font-size: 28px; font-weight: bold; }
+    #scoreBox { border: 1px solid #ccc; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+    #penalidades { font-size: 12px; color: #444; }
+    .nota-A { color: #060; } .nota-B { color: #690; }
+    .nota-C { color: #a60; } .nota-D { color: #c40; } .nota-F { color: #b00; }
   </style>
 </head>
 <body>
   <h3 id="site">...</h3>
+
+  <div id="scoreBox">
+    Pontuação de privacidade: <span id="score">—</span> <span id="nota"></span>
+    <ul id="penalidades"></ul>
+  </div>
+
   <div>Domínios de 3ª parte: <b id="count">0</b></div>
   <ul id="list"></ul>
 
   <h3>Cookies</h3>
-  <div>Total: <b id="cookieCount">0</b></div>
+  <div>Injetados neste carregamento: <b id="injCount">0</b></div>
+  <ul id="injList"></ul>
+  <div>Presentes no cookie jar: <b id="cookieCount">0</b></div>
   <ul id="cookieList"></ul>
 
   <h3>Armazenamento (HTML5)</h3>
@@ -42,6 +54,7 @@
   <div id="hijackResumo">nada suspeito</div>
   <ul id="hijackList"></ul>
 
+  <script src="score.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
