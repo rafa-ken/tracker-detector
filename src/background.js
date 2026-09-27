@@ -15,7 +15,7 @@ const RE_PARAM_ID = /uid|uuid|(^|[_-])id([_-]|$)|sid|gid|cid|visitor|cookie/i;
 const MS_BOUNCE = 1500;
 
 function hostOf(url) {
-  try { return new URL(url).hostname; } catch { return null; }
+  try { return new URL(url).hostname; } catch (e) { return null; }
 }
 
 // Aproximação simples de "site" (eTLD+1). Melhorar depois com lista de sufixos públicos.
@@ -80,6 +80,9 @@ browser.webRequest.onBeforeRequest.addListener(
         paramsEnviados: extrairParams(d.url).map((p) => ({ host, ...p })),
         redirects3p: [],
         paramsRastreioURL: paramsDeRastreio(d.url),
+        websockets: new Set(),
+        contagem: {},
+        hooks: [],
       };
       if (origem) tabsData[d.tabId].hostsConhecidos.add(origem);
       for (const h of chain) {
@@ -105,6 +108,13 @@ browser.webRequest.onBeforeRequest.addListener(
         t.paramsEnviados.push({ host: h, param: p.param, value: p.value });
       }
     }
+
+    if (d.type === "websocket") t.websockets.add(h);
+
+    const c = t.contagem[h] || { n: 0, primeiro: Date.now() };
+    c.n++;
+    c.ultimo = Date.now();
+    t.contagem[h] = c;
   },
   { urls: ["<all_urls>"] }
 );
@@ -325,7 +335,11 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     case "getStorage":
       return activeTab().then((tab) => {
         const t = tabsData[tab.id];
-        return (t && t.storage) || { localStorage: 0, sessionStorage: 0, indexedDB: 0 };
+        const guardado = (t && t.storage) || { localStorage: 0, sessionStorage: 0, indexedDB: 0 };
+        // Mede agora, no quadro principal; se falhar, usa o valor do carregamento
+        return browser.tabs.sendMessage(tab.id, { type: "medirStorageAgora" }, { frameId: 0 })
+          .then((atual) => atual || guardado)
+          .catch(() => guardado);
       });
 
     case "canvasReport":
@@ -340,7 +354,33 @@ browser.runtime.onMessage.addListener((msg, sender) => {
         return { metodos: (t && t.canvas) || [] };
       });
 
+    case "hookReport":
+      if (sender.tab && tabsData[sender.tab.id]) {
+        tabsData[sender.tab.id].hooks = msg.itens;
+      }
+      return;
+
+    case "getHijack":
+      return activeTab().then((tab) => {
+        const t = tabsData[tab.id];
+        if (!t) return { websockets: [], polling: [], hooks: [] };
+
+        const polling = [];
+        for (const [host, c] of Object.entries(t.contagem)) {
+          const janela = (c.ultimo || 0) - c.primeiro;
+          if (c.n >= 10 && janela >= 5000) {
+            polling.push({ host, n: c.n, segundos: Math.round(janela / 1000) });
+          }
+        }
+
+        return {
+          websockets: [...t.websockets],
+          polling: polling.sort((a, b) => b.n - a.n),
+          hooks: t.hooks || [],
+        };
+      });
+
     default:
       return;
   }
-}); 
+});

@@ -63,3 +63,17 @@ browser.runtime.sendMessage({ type: "getTracking" }).then((r) => {
     el.className = "alerta";
   }
 });
+
+browser.runtime.sendMessage({ type: "getHijack" }).then((r) => {
+  const itens = [];
+  r.websockets.forEach((h) => itens.push(`WebSocket para 3ª parte: ${h}`));
+  r.polling.forEach((p) => itens.push(`polling: ${p.host} — ${p.n} req em ${p.segundos}s`));
+  r.hooks.forEach((h) => itens.push(`${h.tipo}: ${h.detalhe}`));
+
+  if (itens.length) {
+    const el = document.getElementById("hijackResumo");
+    el.textContent = `${itens.length} indício(s)`;
+    el.className = "alerta";
+    lista("hijackList", itens, (i) => i);
+  }
+});
