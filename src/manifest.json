@@ -1,0 +1,17 @@
+{
+  "manifest_version": 2,
+  "name": "Tracker Detector",
+  "version": "0.1.0",
+  "description": "Detecta e bloqueia rastreadores, cookies, storage e fingerprinting.",
+  "browser_specific_settings": {
+    "gecko": { "id": "tracker-detector@rafael.dev" }
+  },
+  "permissions": [
+    "webRequest", "webRequestBlocking", "cookies", "storage", "tabs", "<all_urls>"
+  ],
+  "background": { "scripts": ["background.js"] },
+  "browser_action": {
+    "default_title": "Tracker Detector",
+    "default_popup": "popup.html"
+  }
+}
