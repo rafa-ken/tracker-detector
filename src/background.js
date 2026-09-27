@@ -14,6 +14,8 @@ function siteOf(host) {
   return p.slice(-n).join(".");
 }
 
+// ---- Coleta de requisições ----
+
 browser.webRequest.onBeforeRequest.addListener(
   (d) => {
     if (d.tabId < 0) return;
@@ -31,13 +33,47 @@ browser.webRequest.onBeforeRequest.addListener(
 
 browser.tabs.onRemoved.addListener((id) => delete tabsData[id]);
 
-browser.runtime.onMessage.addListener((msg) => {
-  if (msg.type !== "getReport") return;
-  return browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-    const t = tabsData[tab.id];
+// ---- Cookies ----
+
+function classifyCookies(cookies, pageHost) {
+  return cookies.map((c) => {
+    const cookieDomain = c.domain.replace(/^\./, "");
     return {
-      host: t ? t.host : null,
-      thirdParties: t ? [...t.thirdParties].sort() : [],
+      name: c.name,
+      domain: cookieDomain,
+      party: siteOf(cookieDomain) === siteOf(pageHost) ? "1ª parte" : "3ª parte",
+      tipo: c.expirationDate ? "persistente" : "sessão",
     };
   });
+}
+
+// ---- Mensagens (um único listener para todos os tipos) ----
+
+function activeTab() {
+  return browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => tab);
+}
+
+browser.runtime.onMessage.addListener((msg, sender) => {
+  switch (msg.type) {
+    case "getReport":
+      return activeTab().then((tab) => {
+        const t = tabsData[tab.id];
+        return {
+          host: t ? t.host : null,
+          thirdParties: t ? [...t.thirdParties].sort() : [],
+        };
+      });
+
+    case "getCookies":
+      return activeTab().then((tab) => {
+        const t = tabsData[tab.id];
+        if (!t || !t.host) return { cookies: [] };
+        return browser.cookies.getAll({ url: tab.url }).then((cookies) => ({
+          cookies: classifyCookies(cookies, t.host),
+        }));
+      });
+
+    default:
+      return;
+  }
 });
