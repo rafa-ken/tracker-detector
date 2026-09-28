@@ -11,6 +11,11 @@ function pedir(tipo) {
   return browser.runtime.sendMessage({ type: tipo });
 }
 
+document.getElementById("abrirOpcoes").addEventListener("click", (e) => {
+  e.preventDefault();
+  browser.runtime.openOptionsPage();
+});
+
 Promise.all([
   pedir("getReport"),
   pedir("getCookies"),
@@ -18,7 +23,8 @@ Promise.all([
   pedir("getCanvas"),
   pedir("getTracking"),
   pedir("getHijack"),
-]).then(([rep, cook, stor, canv, track, hij]) => {
+  pedir("getBloqueio"),
+]).then(([rep, cook, stor, canv, track, hij, bloq]) => {
   const cookies = (cook && cook.cookies) || [];
   const injetados = (cook && cook.injetados) || [];
 
@@ -26,6 +32,14 @@ Promise.all([
   document.getElementById("site").textContent = rep.host || "sem dados (recarregue a página)";
   document.getElementById("count").textContent = rep.thirdParties.length;
   lista("list", rep.thirdParties, (h) => h);
+
+  // ---- Bloqueio ----
+  if (bloq.total) {
+    const el = document.getElementById("bloqResumo");
+    el.textContent = `${bloq.total} requisição(ões) bloqueada(s) em ${bloq.itens.length} domínio(s)`;
+    el.className = "alerta";
+    lista("bloqList", bloq.itens, (b) => `${b.host} — ${b.n}× (regra: ${b.regra})`);
+  }
 
   // ---- Cookies ----
   const inj1 = injetados.filter((c) => c.party === "1ª parte").length;
@@ -113,4 +127,4 @@ Promise.all([
 
   lista("penalidades", r.penalidades, (p) =>
     `${p.nome}: ${p.qtd} → −${p.pontos}${p.limitado ? " (teto)" : ""}`);
-});
+}); 

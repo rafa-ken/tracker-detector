@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tracker Detector — Opções</title>
+  <style>
+    body { font: 14px sans-serif; max-width: 640px; margin: 24px auto; padding: 0 16px; }
+    textarea { width: 100%; height: 240px; font-family: monospace; font-size: 13px; }
+    .dica { color: #555; font-size: 13px; }
+    #status { color: #060; margin-left: 8px; }
+    button { padding: 6px 14px; }
+  </style>
+</head>
+<body>
+  <h1>Lista de bloqueio</h1>
+
+  <p class="dica">
+    Um domínio por linha. O bloqueio vale para o domínio e todos os seus
+    subdomínios: <code>doubleclick.net</code> também bloqueia
+    <code>ad.doubleclick.net</code>. Só se aplica a requisições de terceira
+    parte — recursos do próprio site nunca são bloqueados.
+  </p>
+
+  <p>
+    <label>
+      <input type="checkbox" id="usarPadrao">
+      Incluir a lista padrão embutida (rastreadores conhecidos)
+    </label>
+  </p>
+
+  <textarea id="lista" placeholder="exemplo.com&#10;rastreador.net"></textarea>
+
+  <p>
+    <button id="salvar">Salvar</button>
+    <span id="status"></span>
+  </p>
+
+  <h2>Lista padrão</h2>
+  <p class="dica" id="padrao"></p>
+
+  <script src="options.js"></script>
+</body>
+</html>

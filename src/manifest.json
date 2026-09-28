@@ -18,6 +18,10 @@
       "all_frames": true
     }
   ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "browser_action": {
     "default_title": "Tracker Detector",
     "default_popup": "popup.html"

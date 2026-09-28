@@ -14,6 +14,42 @@ const RE_PARAM_ID = /uid|uuid|(^|[_-])id([_-]|$)|sid|gid|cid|visitor|cookie/i;
 // Tempo máximo numa página para considerá-la um salto de bounce
 const MS_BOUNCE = 1500;
 
+// ---- Lista de bloqueio ----
+
+const LISTA_PADRAO = [
+  "doubleclick.net", "google-analytics.com", "googletagmanager.com",
+  "facebook.net", "criteo.com", "adnxs.com", "rubiconproject.com",
+  "pubmatic.com", "outbrain.com", "taboola.com", "scorecardresearch.com",
+  "clarity.ms", "hotjar.com", "id5-sync.com",
+];
+
+let listaBloqueio = [];
+
+function carregarLista() {
+  return browser.storage.local.get({ bloqueio: [], usarPadrao: true }).then((cfg) => {
+    const base = cfg.usarPadrao ? LISTA_PADRAO : [];
+    listaBloqueio = base
+      .concat(cfg.bloqueio || [])
+      .map((s) => String(s).trim().toLowerCase())
+      .filter(Boolean);
+  });
+}
+
+carregarLista();
+browser.storage.onChanged.addListener(carregarLista);
+
+// Casa o host com a regra e com qualquer subdomínio dela
+function regraQueBloqueia(host) {
+  if (!host) return null;
+  const h = host.toLowerCase();
+  for (const d of listaBloqueio) {
+    if (h === d || h.endsWith("." + d)) return d;
+  }
+  return null;
+}
+
+// ---- Utilidades ----
+
 function hostOf(url) {
   try { return new URL(url).hostname; } catch (e) { return null; }
 }
@@ -51,7 +87,7 @@ function paramsDeRastreio(url) {
   return achados;
 }
 
-// ---- Coleta de requisições ----
+// ---- Coleta de requisições (listener bloqueante) ----
 
 browser.webRequest.onBeforeRequest.addListener(
   (d) => {
@@ -84,6 +120,7 @@ browser.webRequest.onBeforeRequest.addListener(
         contagem: {},
         hooks: [],
         cookiesInjetados: [],
+        bloqueados: {},
       };
 
       if (origem) tabsData[d.tabId].hostsConhecidos.add(origem);
@@ -107,6 +144,13 @@ browser.webRequest.onBeforeRequest.addListener(
     t.thirdParties.add(h);
     t.hostsConhecidos.add(h);
 
+    const regra = regraQueBloqueia(h);
+    if (regra) {
+      if (!t.bloqueados[h]) t.bloqueados[h] = { n: 0, regra };
+      t.bloqueados[h].n++;
+      return { cancel: true };
+    }
+
     if (t.paramsEnviados.length < 2000) {
       for (const p of extrairParams(d.url)) {
         t.paramsEnviados.push({ host: h, param: p.param, value: p.value });
@@ -120,7 +164,8 @@ browser.webRequest.onBeforeRequest.addListener(
     c.ultimo = Date.now();
     t.contagem[h] = c;
   },
-  { urls: ["<all_urls>"] }
+  { urls: ["<all_urls>"] },
+  ["blocking"]
 );
 
 // ---- Redirects HTTP ----
@@ -433,6 +478,16 @@ browser.runtime.onMessage.addListener((msg, sender) => {
           polling: polling.sort((a, b) => b.n - a.n),
           hooks: t.hooks || [],
         };
+      });
+
+    case "getBloqueio":
+      return activeTab().then((tab) => {
+        const t = tabsData[tab.id];
+        if (!t) return { itens: [], total: 0 };
+        const itens = Object.entries(t.bloqueados)
+          .map(([host, v]) => ({ host, n: v.n, regra: v.regra }))
+          .sort((a, b) => b.n - a.n);
+        return { itens, total: itens.reduce((s, i) => s + i.n, 0) };
       });
 
     default:
