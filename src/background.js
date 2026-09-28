@@ -362,16 +362,17 @@ function detectarBounce(tabId, hostFinal) {
     }
   }
 
-  // 2) Navegação por JavaScript: página de passagem com permanência curta
+    // 2) Navegação por JavaScript: cadeia de passagem que termina NESTA página.
+  // Percorre de trás para frente e para no primeiro salto que não qualifica,
+  // para não reportar bounces de navegações anteriores da mesma aba.
   const nav = navHistory[tabId] || [];
-  const recente = nav.slice(-4);
-  for (let i = 1; i < recente.length; i++) {
-    const meio = recente[i - 1];
-    const destino = recente[i];
-    if (!meio.host || !destino.host) continue;
-    if (siteOf(meio.host) === siteOf(destino.host)) continue;
-    if (destino.ts - meio.ts > MS_BOUNCE) continue;
-    if (meio.origem && siteOf(meio.origem) === siteOf(meio.host)) continue;
+  for (let i = nav.length - 1; i >= 1; i--) {
+    const meio = nav[i - 1];
+    const destino = nav[i];
+    if (!meio.host || !destino.host) break;
+    if (siteOf(meio.host) === siteOf(destino.host)) break;
+    if (destino.ts - meio.ts > MS_BOUNCE) break;
+    if (meio.origem && siteOf(meio.origem) === siteOf(meio.host)) break;
 
     const k = "js|" + meio.host;
     if (jaVisto.has(k)) continue;
